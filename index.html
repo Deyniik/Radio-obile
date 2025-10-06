@@ -1,1 +1,1694 @@
-ы
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deynik Radio Mobile</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📻</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Pacifico&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+        
+        body {
+            background-color: #121212;
+            color: #FFFFFF;
+            min-height: 100vh;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* Экран загрузки */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #121212;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-gif {
+            width: 120px;
+            height: 120px;
+            background: url('https://i.pinimg.com/originals/3b/06/ee/3b06ee2cc6a317ccdc098b4ab36a8388.gif') center/cover no-repeat;
+        }
+        
+        .loading-text {
+            margin-top: 15px;
+            font-family: 'Dancing Script', cursive;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1DB954;
+            text-shadow: 0 0 10px rgba(29, 185, 84, 0.7);
+            letter-spacing: 1px;
+            animation: flicker 1.5s infinite alternate;
+        }
+        
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 27%, 29%, 31%, 33%, 35%, 37%, 39%, 80%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 10px rgba(29, 185, 84, 0.7), 0 0 20px rgba(29, 185, 84, 0.5);
+            }
+            20%, 22%, 24%, 26%, 28%, 30%, 32%, 34%, 36%, 38%, 40%, 60% {
+                opacity: 0.6;
+                text-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
+            }
+        }
+        
+        .container {
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+        }
+        
+        /* Header */
+        header {
+            text-align: center;
+            padding: 15px 0;
+            background: rgba(25, 20, 20, 0.9);
+            border-bottom: 1px solid rgba(29, 185, 84, 0.3);
+            position: relative;
+            z-index: 10;
+        }
+        
+        h1 {
+            font-size: 1.4rem;
+            color: #1DB954;
+            text-shadow: 0 0 10px rgba(29, 185, 84, 0.5);
+            letter-spacing: 1px;
+        }
+        
+        /* Главный GIF контейнер */
+        .gif-section {
+            position: relative;
+            height: 35vh;
+            min-height: 220px;
+            overflow: hidden;
+        }
+        
+        .gif-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .gif-placeholder {
+            width: 100%;
+            height: 100%;
+            background: url('https://i.pinimg.com/originals/7d/04/0e/7d040e94931427709008aaeda14db9c8.gif') center/cover no-repeat;
+        }
+        
+        .playback-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 2px solid rgba(29, 185, 84, 0.3);
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            animation: softPulse 3s infinite ease-in-out;
+        }
+        
+        @keyframes softPulse {
+            0%, 100% {
+                border-width: 2px;
+                box-shadow: 0 0 5px rgba(29, 185, 84, 0.2);
+                opacity: 0.5;
+            }
+            50% {
+                border-width: 3px;
+                box-shadow: 0 0 15px rgba(29, 185, 84, 0.3);
+                opacity: 0.7;
+            }
+        }
+        
+        .visualization {
+            position: absolute;
+            bottom: 50px;
+            left: 0;
+            right: 0;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 2px;
+            padding: 0 15px;
+            z-index: 2;
+        }
+        
+        .bar {
+            width: 3px;
+            background: #1DB954;
+            border-radius: 2px 2px 0 0;
+            transition: height 0.2s ease;
+        }
+        
+        .now-playing {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+            padding: 10px 15px;
+            z-index: 2;
+        }
+        
+        .now-playing h3 {
+            font-size: 0.9rem;
+            color: #1DB954;
+            margin-bottom: 3px;
+        }
+        
+        .now-playing p {
+            font-size: 0.75rem;
+            color: #B3B3B3;
+        }
+        
+        /* Плеер поверх гифки */
+        .player-overlay {
+            position: absolute;
+            bottom: -30px;
+            left: 15px;
+            right: 15px;
+            z-index: 20;
+        }
+        
+        .player-container {
+            background: rgba(25, 20, 20, 0.95);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid rgba(29, 185, 84, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+        }
+        
+        .station-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .player-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            box-shadow: 0 0 10px rgba(29, 185, 84, 0.5);
+            transition: transform 0.3s ease;
+        }
+        
+        .player-icon.playing {
+            animation: rotate 10s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .station-text {
+            flex: 1;
+        }
+        
+        .station-text h2 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: #1DB954;
+        }
+        
+        .station-text p {
+            color: #B3B3B3;
+            font-size: 0.8rem;
+        }
+        
+        .player-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 15px 0;
+        }
+        
+        .player-main-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .player-side-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn {
+            background: rgba(50, 50, 50, 0.8);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:hover {
+            background: rgba(29, 185, 84, 0.4);
+            transform: scale(1.05);
+        }
+        
+        .btn-play {
+            background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+            width: 60px;
+            height: 60px;
+            font-size: 1.4rem;
+            box-shadow: 0 0 12px rgba(29, 185, 84, 0.6);
+        }
+        
+        .btn-play:hover {
+            box-shadow: 0 0 16px rgba(29, 185, 84, 0.8);
+        }
+        
+        .btn-like-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .likes-count-bottom {
+            font-size: 0.8rem;
+            color: #B3B3B3;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .btn-like {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(50, 50, 50, 0.8);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-like.active i {
+            color: #1DB954;
+        }
+        
+        .btn-like:hover {
+            background: rgba(29, 185, 84, 0.4);
+        }
+        
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .volume-icon {
+            font-size: 1rem;
+            color: #1DB954;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .volume-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(80, 80, 80, 0.7);
+            border-radius: 5px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .volume-slider:hover {
+            background: rgba(100, 100, 100, 0.8);
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #1DB954;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+        
+        /* Кнопка выбора радио */
+        .select-radio-btn {
+            background: rgba(29, 185, 84, 0.15);
+            border: 1px solid rgba(29, 185, 84, 0.4);
+            color: #1DB954;
+            padding: 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 50px 15px 15px 15px;
+            min-height: 50px;
+            position: relative;
+            z-index: 15;
+        }
+        
+        .select-radio-btn::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 1px solid rgba(29, 185, 84, 0.3);
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, transparent 100%);
+            z-index: -1;
+        }
+        
+        .select-radio-btn:hover {
+            background: rgba(29, 185, 84, 0.25);
+            box-shadow: 0 0 10px rgba(29, 185, 84, 0.3);
+        }
+        
+        /* Чат */
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #191414;
+            margin: 0 15px 15px 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .chat-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 15px;
+            color: #1DB954;
+            font-size: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(40, 40, 40, 0.5);
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(29, 185, 84, 0.3) #191414;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: #191414;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background-color: rgba(29, 185, 84, 0.3);
+            border-radius: 2px;
+        }
+        
+        .message {
+            padding: 8px 10px;
+            background: rgba(40, 40, 40, 0.6);
+            border-radius: 10px;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            word-wrap: break-word;
+            border-left: 2px solid rgba(29, 185, 84, 0.3);
+        }
+        
+        .message-user {
+            font-weight: bold;
+            color: #1DB954;
+            margin-right: 5px;
+        }
+        
+        .message-time {
+            font-size: 0.7rem;
+            color: #888;
+            margin-left: 5px;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            background: rgba(40, 40, 40, 0.8);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-input {
+            flex: 1;
+            background: rgba(60, 60, 60, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 12px 10px 40px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            outline: none;
+            height: 44px;
+        }
+        
+        .chat-input:focus {
+            border-color: #1DB954;
+        }
+        
+        .emoji-btn {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            background: transparent;
+            border: none;
+            color: #B3B3B3;
+            cursor: pointer;
+            font-size: 1.1rem;
+            z-index: 2;
+        }
+        
+        .chat-send-btn {
+            background: rgba(29, 185, 84, 0.3);
+            border: 1px solid #1DB954;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 60px;
+        }
+        
+        .chat-send-btn:hover:not(:disabled) {
+            background: rgba(29, 185, 84, 0.5);
+        }
+        
+        .chat-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Модальное окно станций */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+        }
+        
+        .modal-content {
+            background-color: #191414;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 400px;
+            border: 2px solid #1DB954;
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #1DB954;
+        }
+        
+        .stations-list {
+            list-style: none;
+            margin-top: 15px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .stations-list li {
+            padding: 12px 15px;
+            margin: 6px 0;
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 3px solid #1DB954;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .stations-list li:hover {
+            background: rgba(29, 185, 84, 0.2);
+        }
+        
+        .stations-list li.active {
+            background: rgba(29, 185, 84, 0.3);
+            border-left: 3px solid #1DB954;
+            box-shadow: 0 0 10px rgba(29, 185, 84, 0.3);
+        }
+        
+        .station-likes {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+            color: #B3B3B3;
+        }
+        
+        .station-icon {
+            margin-right: 10px;
+            font-size: 1rem;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .categories-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .category-btn {
+            background: rgba(40, 40, 40, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #B3B3B3;
+            padding: 6px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .category-btn:hover {
+            background: rgba(29, 185, 84, 0.2);
+            color: white;
+        }
+        
+        .category-btn.active {
+            background: rgba(29, 185, 84, 0.3);
+            color: #1DB954;
+            border-color: #1DB954;
+        }
+        
+        /* Эффект лайка */
+        .heart-effect {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 6rem;
+            color: white;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            animation: heartPop 1.5s ease-out;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .heart-text {
+            margin-top: 15px;
+            font-size: 2rem;
+            color: #1DB954;
+            text-shadow: 0 0 15px rgba(29, 185, 84, 0.9);
+            font-weight: bold;
+            opacity: 0;
+            animation: textFade 1.5s ease-out 0.3s forwards;
+        }
+        
+        @keyframes heartPop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.3);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -60%) scale(1.2);
+            }
+            40% {
+                opacity: 1;
+                transform: translate(-50%, -65%) scale(1.3);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -70%) scale(1.4);
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -75%) scale(1.3);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -80%) scale(1.5);
+            }
+        }
+        
+        @keyframes textFade {
+            0% {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            30% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            70% {
+                opacity: 1;
+                transform: translateY(-5px);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-15px);
+            }
+        }
+        
+        /* Уведомления */
+        .notification {
+            position: fixed;
+            bottom: 80px;
+            right: 12px;
+            background: #1DB954;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .notification.show {
+            opacity: 1;
+        }
+        
+        .minecraft-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #1DB954;
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+            border: 2px solid #1DB954;
+            box-shadow: 0 0 20px rgba(29, 185, 84, 0.5);
+            display: none;
+        }
+
+        /* Ретро эффект */
+        .vintage-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0.1) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.1;
+        }
+
+        /* Кнопка входа */
+        .auth-section {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            z-index: 100;
+        }
+        
+        .google-login-btn {
+            background: rgba(40, 40, 40, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .google-login-btn:hover {
+            background: rgba(29, 185, 84, 0.3);
+        }
+    </style>
+</head>
+<body class="retro-theme">
+    <div class="vintage-overlay"></div>
+    
+    <!-- Экран загрузки -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-gif"></div>
+        <div class="loading-text">Deynik Radio</div>
+    </div>
+    
+    <!-- Модальное окно станций -->
+    <div class="modal" id="stationsModal">
+        <div class="modal-content">
+            <span class="close" id="closeStationsModal">&times;</span>
+            <h3>Выберите радиостанцию</h3>
+            
+            <div class="categories-container">
+                <button class="category-btn active" data-category="all">Все</button>
+                <button class="category-btn" data-category="lofi">Lo-Fi</button>
+                <button class="category-btn" data-category="thematic">Тематические</button>
+                <button class="category-btn" data-category="no-copyright">Без АП</button>
+            </div>
+            
+            <ul class="stations-list" id="stationsList">
+                <!-- Станции будут добавлены через JavaScript -->
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Плашка загрузки для Minecraft -->
+    <div class="minecraft-loading" id="minecraftLoading">
+        <h3>Minecraft Lo-Fi</h3>
+        <p>Загрузка... Пожалуйста, подождите</p>
+    </div>
+    
+    <!-- Эффект лайка -->
+    <div class="heart-effect" id="heartEffect">
+        <i class="fas fa-heart"></i>
+        <div class="heart-text">Нравится!</div>
+    </div>
+
+    <!-- Уведомление -->
+    <div class="notification" id="notification">Текст уведомления</div>
+
+    <div class="container" id="mainContainer">
+        <header>
+            <h1>Deynik Radio</h1>
+            <div class="auth-section" id="auth-section">
+                <button class="google-login-btn" id="googleLoginBtn">
+                    <i class="fab fa-google"></i> Войти
+                </button>
+            </div>
+        </header>
+        
+        <div class="gif-section">
+            <div class="gif-container">
+                <div class="gif-placeholder" id="mainGif"></div>
+                <div class="playback-indicator" id="playback-indicator"></div>
+                <div class="visualization" id="visualization">
+                    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                </div>
+                <div class="now-playing">
+                    <h3>Сейчас играет: <span id="current-track">"Coffee Break"</span></h3>
+                    <p>Исполнитель: <span id="current-artist">Beatsmith</span></p>
+                </div>
+            </div>
+            
+            <div class="player-overlay">
+                <div class="player-container">
+                    <div class="station-info">
+                        <div class="player-icon" id="player-icon">
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <div class="station-text">
+                            <h2 id="player-station">KISS FM</h2>
+                            <p id="player-description">Лучшие мировые хиты в отличном качестве</p>
+                        </div>
+                    </div>
+                    
+                    <div class="player-controls">
+                        <div class="player-main-controls">
+                            <button class="btn" id="prev-btn"><i class="fas fa-step-backward"></i></button>
+                            <button class="btn btn-play" id="play-btn"><i class="fas fa-play"></i></button>
+                            <button class="btn" id="next-btn"><i class="fas fa-step-forward"></i></button>
+                        </div>
+                        
+                        <div class="player-side-controls">
+                            <div class="btn-like-container">
+                                <button class="btn-like" id="like-btn" title="Лайкнуть станцию">
+                                    <i class="far fa-heart"></i>
+                                </button>
+                                <span class="likes-count-bottom" id="likes-count-bottom">0</span>
+                            </div>
+                            <button class="btn" id="refresh-btn" title="Обновить поток">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="volume-control">
+                        <span class="volume-icon"><i class="fas fa-volume-down"></i></span>
+                        <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="70">
+                        <span class="volume-icon"><i class="fas fa-volume-up"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <button class="select-radio-btn" id="select-radio-btn">
+            <i class="fas fa-radio"></i> Выбрать радио
+        </button>
+        
+        <div class="chat-section">
+            <div class="chat-header">
+                <i class="fas fa-comments"></i>
+                <h3>Чат</h3>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message">
+                    <span class="message-user">Система:</span>
+                    Добро пожаловать в чат Deynik Radio!
+                    <span class="message-time">только что</span>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <button class="emoji-btn" id="emoji-btn">
+                    <i class="far fa-smile"></i>
+                </button>
+                <input type="text" class="chat-input" id="chat-input" placeholder="Введите сообщение..." maxlength="200">
+                <button class="chat-send-btn" id="chat-send-btn" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBk4nxZ1ldNQUCxsbgaeYTkm9stq0o9o2Q",
+            authDomain: "deygram-e4814.firebaseapp.com",
+            projectId: "deygram-e4814",
+            storageBucket: "deygram-e4814.firebasestorage.app",
+            messagingSenderId: "591207353726",
+            appId: "1:591207353726:web:d20f5e648d3daf86fcb72f"
+        };
+
+        // Инициализируем Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Объект с радиостанциями
+        const radioStations = {
+            kissint: {
+                name: "KISS FM",
+                url: "https://cloud.revma.ihrhls.com/zc185?rj-org=n08a-e2&rj-ttl=5&rj-tok=AAABmWcyp-cAjUh581g70H83Ow",
+                description: "Лучшие мировые хиты в отличном качестве",
+                currentTrack: "Популярные хиты",
+                currentArtist: "KISS FM",
+                quality: "128kbps",
+                icon: "fas fa-heart",
+                category: "international"
+            },
+            gaga: {
+                name: "Lady Gaga Radio",
+                url: "https://2.mystreaming.net/er/ladygagahits/icecast.audio",
+                description: "Всем молчать! Играет мать!",
+                currentTrack: "Lady Gaga Hits",
+                currentArtist: "Lady Gaga",
+                quality: "128kbps",
+                icon: "fas fa-paw",
+                category: "international"
+            },
+            rp: {
+                name: "Radio Paradise",
+                url: "https://stream.radioparadise.com/flac",
+                description: "Аудиофильский микс рока и электроники без авторских прав",
+                currentTrack: "Eclectic Mix",
+                currentArtist: "Radio Paradise",
+                quality: "FLAC 900+kbps",
+                icon: "fas fa-music",
+                category: "no-copyright"
+            },
+            lofi: {
+                name: "LoFi Girl",
+                url: "https://play.streamafrica.net/lofiradio",
+                description: "Легендарный лоу-фай стрим без авторских прав",
+                currentTrack: "Chill Beats",
+                currentArtist: "LoFi Artist",
+                quality: "192kbps",
+                icon: "fas fa-moon",
+                category: "lofi"
+            },
+            z100: {
+                name: "Z100 New York",
+                url: "https://stream.revma.ihrhls.com/zc1477",
+                description: "Поп-хиты от iHeartRadio",
+                currentTrack: "Top 40 Hit",
+                currentArtist: "Popular Artist",
+                quality: "128kbps",
+                icon: "fas fa-broadcast-tower",
+                category: "international"
+            },
+            jazz: {
+                name: "Jazz24",
+                url: "https://knkx-live-a.edge.audiocdn.com/6285_128k?aw_0_1st.playerid=jazz24.org&uuid=s9a9vs32",
+                description: "Лучшие джазовые композиции",
+                currentTrack: "Smooth Jazz",
+                currentArtist: "Jazz Master",
+                quality: "192kbps",
+                icon: "fas fa-music",
+                category: "international"
+            },
+            chillhop: {
+                name: "Chillhop Radio",
+                url: "https://stream-178.zeno.fm/f3wvbbqmdg8uv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJmM3d2YmJxbWRnOHV2IiwiaG9zdCI6InS0cmVhbS0xNzguemVuby.фм",
+                description: "Расслабляющие биты для работы и отдыха без авторских прав",
+                currentTrack: "Chill Beats",
+                currentArtist: "Chillhop Music",
+                quality: "128kbps",
+                icon: "fas fa-moon",
+                category: "lofi"
+            },
+            lofihiphop: {
+                name: "LoFi Hip Hop",
+                url: "https://stream-158.zeno.fm/0r0xa792kwzuv",
+                description: "Лучшие хип-хоп биты без авторских прав",
+                currentTrack: "Hip Hop Beats",
+                currentArtist: "LoFi Artist",
+                quality: "128kbps",
+                icon: "fas fa-headphones",
+                category: "lofi"
+            },
+            minecraft: {
+                name: "MINECRAFT Lo Fi",
+                url: "https://stream-173.zeno.fm/kp41ftw3zehvv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJrcDQxZnR3M3plaHZ2IiwiaG9zdCI6InN0cmVhbS0xNzMuemVuby5mbSIsInJ0dGwiOjUsImp0aSI6Ii1MelctMUFsUmtLeHZoaWkwUXBSZWciLCJpYXQiOjE3NTg2NDUyNDAsImV4cCI6MTc1ODY0NTMwMH0.Ef_7t2RVX9WvfCeKorGs2acDLze7Sp8n5bzo3Ix58xE",
+                description: "Уютные Minecraft саундтреки в Lo-Fi аранжировке",
+                currentTrack: "Minecraft Ambience",
+                currentArtist: "C418 Lo-Fi Remix",
+                quality: "128kbps",
+                icon: "fas fa-cube",
+                category: "no-copyright"
+            },
+            halloween: {
+                name: "Halloween Radio",
+                url: "https://radio1.streamserver.link:8000/hrm-aac",
+                description: "Музыка для Хэллоуина и ужастиков",
+                currentTrack: "Spooky Sounds",
+                currentArtist: "Halloween FM",
+                quality: "128kbps",
+                icon: "fas fa-ghost",
+                category: "thematic"
+            }
+        };
+
+        // Массив с гифками
+        const gifs = [
+            'https://i.pinimg.com/originals/7d/04/0e/7d040e94931427709008aaeda14db9c8.gif',
+            'https://i.pinimg.com/originals/20/c8/3d/20c83d1cb257a6c4e5f68960ef0c3046.gif',
+            'https://i.pinimg.com/originals/9a/99/a1/9a99a10635e27f336c2cd6bec02b2aae.gif',
+            'https://i.pinimg.com/originals/13/45/50/13455040862ac9b8e465185878838cf1.gif'
+        ];
+
+        // Массив с гифками для Minecraft станции
+        const minecraftGifs = [
+            'https://i.pinimg.com/originals/44/f2/f6/44f2f6325aa9bf8c93ed6c3d6e8f8d57.gif',
+            'https://i.pinimg.com/originals/05/cf/1b/05cf1b97379bb751d2bf03b55ee16c5e.gif',
+            'https://i.pinimg.com/originals/da/85/43/da8543494a3baaec4fc61c2b952f8de0.gif'
+        ];
+
+        // Массив ID станций для навигации
+        const stationIds = Object.keys(radioStations);
+        
+        // ПРОСТОЙ И РАБОЧИЙ ВАРИАНТ ЗАГРУЗКИ
+        window.onload = function() {
+            setTimeout(function() {
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'flex';
+                initApp();
+            }, 1000);
+        };
+
+        function initApp() {
+            console.log('Мобильное приложение запущено!');
+            
+            const playButton = document.getElementById('play-btn');
+            const prevButton = document.getElementById('prev-btn');
+            const nextButton = document.getElementById('next-btn');
+            const refreshButton = document.getElementById('refresh-btn');
+            const likeButton = document.getElementById('like-btn');
+            const selectRadioBtn = document.getElementById('select-radio-btn');
+            const volumeSlider = document.getElementById('volume-slider');
+            const visualization = document.getElementById('visualization');
+            const bars = visualization.querySelectorAll('.bar');
+            const mainGif = document.getElementById('mainGif');
+            const playbackIndicator = document.getElementById('playback-indicator');
+            const chatInput = document.getElementById('chat-input');
+            const chatSendBtn = document.getElementById('chat-send-btn');
+            const chatMessages = document.getElementById('chat-messages');
+            const stationsModal = document.getElementById('stationsModal');
+            const closeStationsModal = document.getElementById('closeStationsModal');
+            const stationsList = document.getElementById('stationsList');
+            const minecraftLoading = document.getElementById('minecraftLoading');
+            const notification = document.getElementById('notification');
+            const categoryBtns = document.querySelectorAll('.category-btn');
+            const heartEffect = document.getElementById('heartEffect');
+            const likesCountBottom = document.getElementById('likes-count-bottom');
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            const authSection = document.getElementById('auth-section');
+            
+            let isPlaying = false;
+            let audio = null;
+            let currentStationIndex = 0;
+            let currentStation = stationIds[currentStationIndex];
+            let visualizationInterval = null;
+            let stationLikes = {};
+            let userLikedStations = new Set();
+            let chatUnsubscribe = null;
+            let likesUnsubscribe = null;
+
+            // Инициализация
+            loadStationsList();
+            loadLikes();
+            updateStationInfo();
+            changeGif();
+            updateVolumeIcon();
+
+            // Функция показа уведомления
+            function showNotification(message, type = 'info') {
+                notification.textContent = message;
+                notification.className = 'notification';
+                
+                if (type === 'success') {
+                    notification.style.background = '#1DB954';
+                } else if (type === 'error') {
+                    notification.style.background = '#FF5722';
+                } else {
+                    notification.style.background = '#2196F3';
+                }
+                
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+            
+            // Функции для работы с аутентификацией
+            function updateAuthUI(user) {
+                if (user) {
+                    authSection.innerHTML = `
+                        <div style="color: #1DB954; font-size: 0.8rem;">
+                            <i class="fas fa-user"></i> ${user.displayName || 'Пользователь'}
+                        </div>
+                    `;
+                    loadChatHistory();
+                } else {
+                    authSection.innerHTML = `
+                        <button class="google-login-btn" id="googleLoginBtn">
+                            <i class="fab fa-google"></i> Войти
+                        </button>
+                    `;
+                    loadChatHistory();
+                    document.getElementById('googleLoginBtn').addEventListener('click', signInWithGoogle);
+                }
+            }
+            
+            function signInWithGoogle() {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                auth.signInWithPopup(provider)
+                    .then((result) => {
+                        showNotification('Успешный вход!', 'success');
+                    })
+                    .catch((error) => {
+                        console.error('Ошибка входа:', error);
+                        showNotification('Ошибка входа', 'error');
+                    });
+            }
+            
+            // Загрузка списка станций в модальное окно
+            function loadStationsList() {
+                stationsList.innerHTML = '';
+                
+                stationIds.forEach(stationId => {
+                    const station = radioStations[stationId];
+                    const li = document.createElement('li');
+                    li.setAttribute('data-station', stationId);
+                    li.setAttribute('data-category', station.category);
+                    
+                    if (stationId === currentStation) {
+                        li.classList.add('active');
+                    }
+                    
+                    li.innerHTML = `
+                        <div style="display: flex; align-items: center;">
+                            <span class="station-icon"><i class="${station.icon}"></i></span> 
+                            ${station.name}
+                        </div>
+                        <div class="station-likes">
+                            <span class="likes-count">0</span> <i class="fas fa-heart"></i>
+                        </div>
+                    `;
+                    
+                    li.addEventListener('click', function() {
+                        const stationId = this.getAttribute('data-station');
+                        currentStationIndex = stationIds.indexOf(stationId);
+                        isPlaying = true;
+                        playButton.innerHTML = '<i class="fas fa-pause"></i>';
+                        document.getElementById('player-icon').classList.add('playing');
+                        changeStation();
+                        stationsModal.style.display = 'none';
+                    });
+                    
+                    stationsList.appendChild(li);
+                });
+            }
+            
+            // Фильтрация станций по категориям
+            function filterStationsByCategory(category) {
+                const stations = stationsList.querySelectorAll('li');
+                
+                stations.forEach(station => {
+                    const stationCategory = station.getAttribute('data-category');
+                    
+                    if (category === 'all' || stationCategory === category) {
+                        station.style.display = 'flex';
+                    } else {
+                        station.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Функции для работы с лайками
+            function loadLikes() {
+                if (likesUnsubscribe) likesUnsubscribe();
+                
+                likesUnsubscribe = db.collection('stationLikes')
+                    .onSnapshot((snapshot) => {
+                        stationLikes = {};
+                        userLikedStations = new Set();
+                        
+                        snapshot.forEach((doc) => {
+                            const data = doc.data();
+                            stationLikes[doc.id] = data;
+                        });
+                        
+                        // Проверяем какие станции лайкнул текущий пользователь
+                        const user = auth.currentUser;
+                        const userId = user ? user.uid : 'anonymous';
+                        
+                        Object.keys(stationLikes).forEach(stationId => {
+                            if (stationLikes[stationId].users && stationLikes[stationId].users[userId]) {
+                                userLikedStations.add(stationId);
+                            }
+                        });
+                        
+                        updateLikesUI();
+                    });
+            }
+            
+            function toggleLike() {
+                const user = auth.currentUser;
+                const userId = user ? user.uid : 'anonymous';
+                const stationId = currentStation;
+                
+                if (userLikedStations.has(stationId)) {
+                    removeLike(stationId, userId);
+                } else {
+                    addLike(stationId, userId);
+                    showHeartEffect();
+                }
+                
+                likeButton.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    likeButton.style.transform = 'scale(1)';
+                }, 200);
+            }
+            
+            function addLike(stationId, userId) {
+                const stationRef = db.collection('stationLikes').doc(stationId);
+                
+                stationRef.get().then((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const newCount = (data.count || 0) + 1;
+                        const users = data.users || {};
+                        users[userId] = true;
+                        
+                        stationRef.update({
+                            count: newCount,
+                            users: users
+                        });
+                    } else {
+                        stationRef.set({
+                            count: 1,
+                            users: {
+                                [userId]: true
+                            }
+                        });
+                    }
+                });
+            }
+            
+            function removeLike(stationId, userId) {
+                const stationRef = db.collection('stationLikes').doc(stationId);
+                
+                stationRef.get().then((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const newCount = Math.max(0, (data.count || 0) - 1);
+                        const users = data.users || {};
+                        delete users[userId];
+                        
+                        if (newCount === 0) {
+                            stationRef.delete();
+                        } else {
+                            stationRef.update({
+                                count: newCount,
+                                users: users
+                            });
+                        }
+                    }
+                });
+            }
+            
+            function updateLikesUI() {
+                // Обновляем лайки в списке станций
+                const stationItems = stationsList.querySelectorAll('li');
+                stationItems.forEach(item => {
+                    const stationId = item.getAttribute('data-station');
+                    const likesCount = item.querySelector('.likes-count');
+                    if (likesCount) {
+                        const count = stationLikes[stationId] ? stationLikes[stationId].count || 0 : 0;
+                        likesCount.textContent = count;
+                    }
+                });
+                
+                // Обновляем кнопку лайка в плеере
+                const isLiked = userLikedStations.has(currentStation);
+                likeButton.classList.toggle('active', isLiked);
+                likeButton.querySelector('i').className = isLiked ? 'fas fa-heart' : 'far fa-heart';
+                
+                const currentCount = stationLikes[currentStation] ? stationLikes[currentStation].count || 0 : 0;
+                likesCountBottom.textContent = currentCount;
+            }
+            
+            // Функция для показа эффекта сердечка
+            function showHeartEffect() {
+                heartEffect.style.display = 'flex';
+                heartEffect.style.opacity = '1';
+                
+                setTimeout(() => {
+                    heartEffect.style.opacity = '0';
+                    setTimeout(() => {
+                        heartEffect.style.display = 'none';
+                    }, 1500);
+                }, 1500);
+            }
+            
+            // Обновление иконки громкости
+            function updateVolumeIcon() {
+                const volume = volumeSlider.value;
+                const volumeIcons = document.querySelectorAll('.volume-icon i');
+                volumeIcons.forEach(icon => {
+                    if (volume == 0) {
+                        icon.className = 'fas fa-volume-mute';
+                    } else if (volume < 50) {
+                        icon.className = 'fas fa-volume-down';
+                    } else {
+                        icon.className = 'fas fa-volume-up';
+                    }
+                });
+            }
+            
+            // Функции для работы с чатом
+            function loadChatHistory() {
+                if (chatUnsubscribe) chatUnsubscribe();
+                
+                chatUnsubscribe = db.collection('chat')
+                    .orderBy('timestamp', 'desc')
+                    .limit(50)
+                    .onSnapshot((snapshot) => {
+                        chatMessages.innerHTML = '';
+                        
+                        if (snapshot.empty) {
+                            chatMessages.innerHTML = '<div class="message">Чат пуст. Будьте первым!</div>';
+                            return;
+                        }
+                        
+                        const messages = [];
+                        snapshot.forEach((doc) => {
+                            messages.push({ id: doc.id, ...doc.data() });
+                        });
+                        
+                        messages.sort((a, b) => {
+                            const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+                            const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+                            return timeA - timeB;
+                        });
+                        
+                        messages.forEach((message) => {
+                            addMessageToChat(message);
+                        });
+                        
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }, (error) => {
+                        console.error('Ошибка загрузки чата:', error);
+                        chatMessages.innerHTML = '<div class="message">Ошибка загрузки чата</div>';
+                    });
+            }
+
+            function addMessageToChat(message) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'message';
+                
+                let timeString = 'только что';
+                if (message.timestamp) {
+                    const time = message.timestamp.toDate ? message.timestamp.toDate() : new Date(message.timestamp);
+                    timeString = time.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                }
+                
+                let messageContent = '';
+                if (message.gif) {
+                    messageContent = `
+                        <span class="message-user">${message.userName || 'Аноним'}:</span>
+                        <img src="${message.gif}" style="max-width: 150px; border-radius: 8px; margin-top: 5px; display: block;" alt="GIF">
+                        <span class="message-time">${timeString}</span>
+                    `;
+                } else {
+                    messageContent = `
+                        <span class="message-user">${message.userName || 'Аноним'}:</span>
+                        ${message.text || ''}
+                        <span class="message-time">${timeString}</span>
+                    `;
+                }
+                
+                messageElement.innerHTML = messageContent;
+                chatMessages.appendChild(messageElement);
+            }
+
+            function sendMessage() {
+                const user = auth.currentUser;
+                if (!user) {
+                    showNotification('Войдите в систему, чтобы отправлять сообщения', 'error');
+                    return;
+                }
+                
+                const messageText = chatInput.value.trim();
+                if (messageText === '') return;
+                
+                const displayName = user.displayName || 'Пользователь';
+                
+                const message = {
+                    text: messageText,
+                    userName: displayName,
+                    userId: user.uid,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                chatSendBtn.disabled = true;
+                chatSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                db.collection('chat').add(message)
+                    .then(() => {
+                        chatInput.value = '';
+                    })
+                    .catch((error) => {
+                        console.error('Ошибка отправки сообщения:', error);
+                        showNotification('Ошибка отправки сообщения', 'error');
+                    })
+                    .finally(() => {
+                        chatSendBtn.disabled = false;
+                        chatSendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                    });
+            }
+            
+            // Обработчики событий
+            volumeSlider.addEventListener('input', function() {
+                if (audio) {
+                    audio.volume = this.value / 100;
+                }
+                updateVolumeIcon();
+            });
+            
+            selectRadioBtn.addEventListener('click', function() {
+                stationsModal.style.display = 'block';
+            });
+            
+            closeStationsModal.addEventListener('click', function() {
+                stationsModal.style.display = 'none';
+            });
+            
+            categoryBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    categoryBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    filterStationsByCategory(btn.dataset.category);
+                });
+            });
+            
+            window.addEventListener('click', function(event) {
+                if (event.target === stationsModal) {
+                    stationsModal.style.display = 'none';
+                }
+            });
+            
+            // Обработчики чата
+            chatInput.addEventListener('input', function() {
+                chatSendBtn.disabled = this.value.trim() === '';
+            });
+            
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !chatSendBtn.disabled) sendMessage();
+            });
+            
+            chatSendBtn.addEventListener('click', sendMessage);
+            
+            // Обработчик кнопки лайка
+            likeButton.addEventListener('click', toggleLike);
+            
+            // Обработчик кнопки воспроизведения
+            playButton.addEventListener('click', function() {
+                isPlaying = !isPlaying;
+                
+                if (isPlaying) {
+                    playButton.innerHTML = '<i class="fas fa-pause"></i>';
+                    document.getElementById('player-icon').classList.add('playing');
+                    if (!audio) {
+                        audio = new Audio(radioStations[currentStation].url);
+                        audio.volume = volumeSlider.value / 100;
+                    }
+                    audio.play().catch(error => {
+                        console.error('Ошибка воспроизведения:', error);
+                        isPlaying = false;
+                        playButton.innerHTML = '<i class="fas fa-play"></i>';
+                        document.getElementById('player-icon').classList.remove('playing');
+                        showNotification('Ошибка воспроизведения', 'error');
+                    });
+                    playbackIndicator.style.opacity = '1';
+                    startVisualization();
+                } else {
+                    playButton.innerHTML = '<i class="fas fa-play"></i>';
+                    document.getElementById('player-icon').classList.remove('playing');
+                    if (audio) audio.pause();
+                    playbackIndicator.style.opacity = '0';
+                    stopVisualization();
+                }
+            });
+            
+            // Обработчик кнопки "Предыдущая станция"
+            prevButton.addEventListener('click', function() {
+                currentStationIndex = (currentStationIndex - 1 + stationIds.length) % stationIds.length;
+                isPlaying = true;
+                playButton.innerHTML = '<i class="fas fa-pause"></i>';
+                document.getElementById('player-icon').classList.add('playing');
+                changeStation();
+            });
+            
+            // Обработчик кнопки "Следующая станция"
+            nextButton.addEventListener('click', function() {
+                currentStationIndex = (currentStationIndex + 1) % stationIds.length;
+                isPlaying = true;
+                playButton.innerHTML = '<i class="fas fa-pause"></i>';
+                document.getElementById('player-icon').classList.add('playing');
+                changeStation();
+            });
+            
+            // Обработчик кнопки "Обновить"
+            refreshButton.addEventListener('click', function() {
+                this.classList.add('reload-animation');
+                setTimeout(() => {
+                    this.classList.remove('reload-animation');
+                }, 500);
+                
+                if (audio) {
+                    const wasPlaying = !audio.paused;
+                    audio.pause();
+                    audio = new Audio(radioStations[currentStation].url + '?nocache=' + new Date().getTime());
+                    audio.volume = volumeSlider.value / 100;
+                    if (wasPlaying) {
+                        audio.play().catch(error => {
+                            console.error('Ошибка воспроизведения:', error);
+                        });
+                    }
+                    changeGif();
+                    showNotification('Станция перезагружена', 'success');
+                }
+            });
+            
+            // Функция смены станции
+            function changeStation() {
+                currentStation = stationIds[currentStationIndex];
+                updateStationInfo();
+                loadStationsList();
+                
+                // Показываем плашку загрузки для Minecraft
+                if (currentStation === 'minecraft') {
+                    minecraftLoading.style.display = 'block';
+                } else {
+                    minecraftLoading.style.display = 'none';
+                }
+                
+                if (isPlaying) {
+                    if (audio) audio.pause();
+                    audio = new Audio(radioStations[currentStation].url);
+                    audio.volume = volumeSlider.value / 100;
+                    audio.play().then(() => {
+                        minecraftLoading.style.display = 'none';
+                    }).catch(error => {
+                        console.error('Ошибка воспроизведения:', error);
+                        if (currentStation === 'minecraft') {
+                            minecraftLoading.style.display = 'block';
+                        }
+                    });
+                    playbackIndicator.style.opacity = '1';
+                    startVisualization();
+                }
+                
+                changeGif();
+                updateLikesUI();
+            }
+            
+            // Функция обновления информации о станции
+            function updateStationInfo() {
+                const station = radioStations[currentStation];
+                document.getElementById('current-track').textContent = station.currentTrack;
+                document.getElementById('current-artist').textContent = station.currentArtist;
+                document.getElementById('player-station').textContent = station.name;
+                document.getElementById('player-description').textContent = station.description;
+                document.getElementById('player-icon').innerHTML = `<i class="${station.icon}"></i>`;
+            }
+            
+            // Функция смены гифки
+            function changeGif() {
+                let randomGif;
+                if (currentStation === 'minecraft') {
+                    randomGif = minecraftGifs[Math.floor(Math.random() * minecraftGifs.length)];
+                } else {
+                    randomGif = gifs[Math.floor(Math.random() * gifs.length)];
+                }
+                
+                mainGif.style.opacity = '0';
+                setTimeout(() => {
+                    mainGif.style.backgroundImage = `url('${randomGif}')`;
+                    mainGif.style.opacity = '1';
+                }, 300);
+            }
+            
+            // Функция визуализации
+            function startVisualization() {
+                if (visualizationInterval) clearInterval(visualizationInterval);
+                visualizationInterval = setInterval(() => {
+                    bars.forEach(bar => {
+                        bar.style.height = `${Math.floor(Math.random() * 20) + 1}px`;
+                    });
+                }, 100);
+            }
+            
+            function stopVisualization() {
+                if (visualizationInterval) clearInterval(visualizationInterval);
+                bars.forEach(bar => bar.style.height = '2px');
+            }
+            
+            // Слушатель состояния аутентификации
+            auth.onAuthStateChanged(updateAuthUI);
+            
+            // Загружаем историю чата
+            loadChatHistory();
+        }
+    </script>
+</body>
+</html>
